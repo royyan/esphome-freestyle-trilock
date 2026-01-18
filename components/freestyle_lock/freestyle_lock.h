@@ -42,6 +42,21 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
       case ESP_GATTC_REG_FOR_NOTIFY_EVT:
         if (param->reg_for_notify.status == ESP_GATT_OK) {
           send_initial_();
+        } else {
+          ESP_LOGE("freestyle_lock", "Failed to register for notifications");
+        }
+        break;
+
+      case ESP_GATTC_CONNECT_EVT:
+        ESP_LOGD("freestyle_lock", "BLE connected");
+        break;
+
+      case ESP_GATTC_DISCONNECT_EVT:
+        ESP_LOGD("freestyle_lock", "BLE disconnected");
+        if (current_step_ != -1) {
+          publish_state(LOCK_STATE_NONE);
+          current_step_ = -1;
+          done_ = false;
         }
         break;
 
@@ -52,7 +67,7 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
 
   void lock() override { control(2); }      // Lock
   void unlock() override { control(1); }    // Unlock
-  void open() override { control(3); }      // Deadlock
+  void open() override { control(3); }      // Deadlock (open as per some lock semantics)
 
   void set_ble_mac(const std::string &mac) { ble_mac_ = mac; }
   void set_aes_key(const std::string &key) { aes_key_str_ = key; }
@@ -93,7 +108,7 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
   }
 
   void notify_callback_(const uint8_t* data, size_t len) {
-    ESP_LOGD("freestyle_lock", "Notify %zu bytes", len);
+    ESP_LOGD("freestyle_lock", "Notify received (%zu bytes)", len);
 
     switch (current_step_) {
       case 0:
@@ -153,10 +168,10 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
           uint16_t rlen = data[9] | (data[10] << 8);
           uint8_t rnonce[12];
           memcpy(rnonce, data + 11, 12);
-          uint8_t dec[256];
+          uint8_t dec[512];
           decode_message_(aes_key_, data + 23, len - 23, dec, sender_nonce_, rnonce, rid);
           uint8_t reported = parse_reported_(dec, rlen);
-          ESP_LOGI("freestyle_lock", "Success - reported state: %d", reported);
+          ESP_LOGI("freestyle_lock", "Operation successful. Reported state: %d", reported);
           current_step_ = 5;
         }
         break;
@@ -180,7 +195,7 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
     }
 
     if (done_ || (millis() - start_time_ > TIMEOUT_MS)) {
-      if (!done_) ESP_LOGW("freestyle_lock", "Timeout");
+      if (!done_) ESP_LOGW("freestyle_lock", "Operation timed out");
       parent()->disconnect();
       publish_state(LOCK_STATE_NONE);
     }
@@ -215,8 +230,10 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
   }
 
   size_t encode_protobuf_(uint8_t state, uint32_t token, std::vector<uint8_t>& out) {
-    out = {0x0A, 0};
-    size_t start = out.size();
+    out.clear();
+    out.push_back(0x0A);
+    size_t len_pos = out.size();
+    out.push_back(0);  // placeholder
     out.push_back(0x08);
     out.push_back(state);
     out.push_back(0x10);
@@ -225,7 +242,7 @@ class FreestyleLock : public lock::Lock, public Component, public BLEClientNode 
       out.push_back((v & 0x7F) | (v >= 0x80 ? 0x80 : 0));
       v >>= 7;
     } while (v);
-    out[start - 1] = out.size() - start;
+    out[len_pos] = out.size() - len_pos - 1;
     return out.size();
   }
 
