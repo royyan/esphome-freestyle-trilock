@@ -1,7 +1,11 @@
 esphome:
   name: freestyle_trilock
-  platform: ESP32
+  platform: esp32
   board: wt32-eth01
+
+external_components:
+  - source: ./custom_components
+    components: [freestyle_trilock]
 
 ethernet:
   type: LAN8720
@@ -12,30 +16,33 @@ ethernet:
   power_pin: GPIO16
 
 logger:
-  level: VERBOSE
+  level: DEBUG
 
 api:
 ota:
 
+# Set these values for your lock in Home Assistant/ESPHome config
+# You can also move them to secrets.yaml
+
+# As of 2025, ESPHome supports the lambda variable passing system:
 globals:
   - id: trilock_mac
     type: std::string
     restore_value: no
-    initial_value: '"AA:BB:CC:DD:EE:FF"' # <-- Your lock MAC address
+    initial_value: '"AA:BB:CC:DD:EE:FF"'  # <-- Your lock MAC address, lowercase, colons
   - id: trilock_aes_key
     type: std::string
     restore_value: no
-    initial_value: '"00112233445566778899AABBCCDDEEFF"' # <-- 16 hex bytes AES Key
+    initial_value: '"00112233445566778899AABBCCDDEEFF"'  # <-- 32 hex chars == 16 byte AES key
 
 custom_component:
-  - file: "custom_components/freestyle_trilock/freestyle_trilock_component.h"
-    variables:
-      mac_address: !lambda 'id(trilock_mac)'
-      aes_key: !lambda 'id(trilock_aes_key)'
+  - id: freestyle_trilock
+    lambda: |-
+      auto *ft = new FreestyleTrilockComponent(id(trilock_mac), id(trilock_aes_key));
+      return {ft};
 
 lock:
   - platform: custom
     lambda: |-
-      auto trilock = static_cast<FreestyleTrilockComponent *>(custom_components[0]);
-      return {trilock->get_lock()};
-    name: Freestyle Trilock
+      return {freestyle_trilock->get_lock()};
+    name: "Freestyle Trilock"
