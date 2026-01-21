@@ -1,0 +1,41 @@
+esphome:
+  name: freestyle_trilock
+  platform: ESP32
+  board: wt32-eth01
+
+ethernet:
+  type: LAN8720
+  mdc_pin: GPIO23
+  mdio_pin: GPIO18
+  clk_mode: GPIO0_OUT
+  phy_addr: 1
+  power_pin: GPIO16
+
+logger:
+  level: VERBOSE
+
+api:
+ota:
+
+globals:
+  - id: trilock_mac
+    type: std::string
+    restore_value: no
+    initial_value: '"AA:BB:CC:DD:EE:FF"' # <-- Your lock MAC address
+  - id: trilock_aes_key
+    type: std::string
+    restore_value: no
+    initial_value: '"00112233445566778899AABBCCDDEEFF"' # <-- 16 hex bytes AES Key
+
+custom_component:
+  - file: "custom_components/freestyle_trilock/freestyle_trilock_component.h"
+    variables:
+      mac_address: !lambda 'id(trilock_mac)'
+      aes_key: !lambda 'id(trilock_aes_key)'
+
+lock:
+  - platform: custom
+    lambda: |-
+      auto trilock = static_cast<FreestyleTrilockComponent *>(custom_components[0]);
+      return {trilock->get_lock()};
+    name: Freestyle Trilock

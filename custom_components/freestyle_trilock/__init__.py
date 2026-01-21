@@ -1,0 +1,1 @@
+# Empty file, required for ESPHome custom component discovery
