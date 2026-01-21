@@ -1,6 +1,9 @@
 #include "encoder.h"
 #include "mbedtls/gcm.h"
 #include <Arduino.h>
+#ifndef Log
+#define Log ESP_LOG_
+#endif
 
 auto encodeMessage(char *key, unsigned char *input, uint8_t inputLen,
                    unsigned char *outArr, char *iv1, unsigned short msgId) -> int {
