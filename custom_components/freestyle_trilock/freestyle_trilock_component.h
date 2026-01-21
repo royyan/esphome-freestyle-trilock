@@ -11,7 +11,7 @@
 #include <vector>
 
 // ----- DEPENDENCIES -----
-#include "proto/cmd.pb.h"     // NanoPB protocol definitions
+#include "cmd.pb.h"     // NanoPB protocol definitions
 #include "encoder.h"          // from mcchas repo
 #include "CRC.h"              // see above (must exist in same directory)
 #include <pb_encode.h>
